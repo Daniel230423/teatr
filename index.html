@@ -79,7 +79,7 @@
     .grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
     .card {
       border: 1px solid #ffffff12; background: #191817; border-radius: 19px;
-      overflow: hidden; transition: .2s;
+      overflow: hidden; transition: .2s; cursor: pointer;
     }
     .card:hover { transform: translateY(-3px); border-color: #ff641f77; }
     .photo {
@@ -136,6 +136,11 @@
     .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
     .preview { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .preview img { width:70px; height:70px; object-fit:cover; border-radius:10px; }
+    .detail-gallery { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-bottom:18px; }
+    .detail-gallery img { width:100%; height:180px; object-fit:cover; border-radius:10px; }
+    .detail-description { white-space:pre-wrap; line-height:1.55; }
+    .detail-record .tags { margin-bottom:18px; }
+    .detail-record .subitem { cursor:pointer; }
     .sub-admin { margin-top:20px; border-top:1px solid var(--line); padding-top:16px; }
     footer { padding:40px 0 20px; color:var(--muted); font-size:12px; }
     .hidden { display:none !important; }
@@ -284,6 +289,14 @@
     </form>
   </dialog>
 
+  <dialog id="detailDialog">
+    <div class="dialog-head">
+      <h2 id="detailTitle"></h2>
+      <button class="btn" type="button" onclick="detailDialog.close()">Закрыть</button>
+    </div>
+    <div id="detailContent"></div>
+  </dialog>
+
 <script>
   const STORAGE_KEY = "kulisy_inventory_v1";
   const demoItems = [
@@ -310,6 +323,7 @@
   let variantDraftImages = [];
   const itemDialog = document.querySelector("#itemDialog");
   const variantDialog = document.querySelector("#variantDialog");
+  const detailDialog = document.querySelector("#detailDialog");
 
   function loadItems() {
     try {
@@ -352,6 +366,47 @@
   function allRecords() {
     return items.flatMap(item => [item, ...(item.variants || [])]);
   }
+  function openRecordDetails(id) {
+    const record = allRecords().find(item => item.id === id);
+    if (!record) return;
+    document.querySelector("#detailTitle").textContent = record.title;
+    document.querySelector("#detailContent").innerHTML = `
+      <div class="detail-record">
+        ${record.images?.length ? `<div class="detail-gallery">${record.images.map(image => `<img src="${esc(image)}" alt="${esc(record.title)}">`).join("")}</div>` : ""}
+        <div class="article">${esc(record.category)}${record.article ? " · " + esc(record.article) : ""}</div>
+        <p><span class="status ${statusClass(record.status)}">${esc(record.status || "Статус не указан")}</span>${record.status === "Занят" && record.bookedBy ? ` <span class="muted">Занято: ${esc(record.bookedBy)}</span>` : ""}</p>
+        ${record.description ? `<p class="muted detail-description">${esc(record.description)}</p>` : ""}
+        ${(record.tags || []).length ? `<div class="tags">${record.tags.map(tag => `<span class="tag">#${esc(tag)}</span>`).join("")}</div>` : ""}
+        ${record.variants?.length ? `<div class="subitems"><strong style="font-size:12px">Варианты</strong>${record.variants.map(variant => `
+          <div class="subitem" data-record-id="${esc(variant.id)}" role="button" tabindex="0">
+            <span>${esc(variant.title)}${variant.article ? ` · ${esc(variant.article)}` : ""}</span>
+            <span class="status ${statusClass(variant.status)}">${esc(variant.status || "Статус не указан")}</span>
+          </div>`).join("")}</div>` : ""}
+      </div>`;
+    if (!detailDialog.open) detailDialog.showModal();
+  }
+  document.querySelector("#catalogGrid").addEventListener("click", event => {
+    const target = event.target.closest("[data-record-id]");
+    if (target) openRecordDetails(target.dataset.recordId);
+  });
+  document.querySelector("#catalogGrid").addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = event.target.closest("[data-record-id]");
+    if (!target) return;
+    event.preventDefault();
+    openRecordDetails(target.dataset.recordId);
+  });
+  detailDialog.addEventListener("click", event => {
+    const target = event.target.closest("[data-record-id]");
+    if (target) openRecordDetails(target.dataset.recordId);
+  });
+  detailDialog.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = event.target.closest("[data-record-id]");
+    if (!target) return;
+    event.preventDefault();
+    openRecordDetails(target.dataset.recordId);
+  });
   function renderCatalog() {
     const categories = [...new Set(allRecords().map(x => x.category).filter(Boolean))].sort();
     const select = document.querySelector("#categoryFilter");
@@ -370,7 +425,7 @@
     });
     document.querySelector("#countLabel").textContent = `${found.length} позиций`;
     document.querySelector("#catalogGrid").innerHTML = found.length ? found.map(item => `
-      <article class="card">
+      <article class="card" data-record-id="${esc(item.id)}" role="button" tabindex="0" aria-label="Открыть карточку: ${esc(item.title)}">
         <div class="photo">${item.images?.[0] ? `<img src="${item.images[0]}" alt="${esc(item.title)}">` : "✦"}</div>
         <div class="card-body">
           <div class="card-top">
@@ -381,7 +436,7 @@
           ${item.description ? `<p class="muted" style="font-size:13px;line-height:1.45">${esc(item.description)}</p>` : ""}
           <div class="tags">${(item.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join("")}</div>
           ${item.variants?.length ? `<div class="subitems"><strong style="font-size:12px">Варианты</strong>
-            ${item.variants.map(v => `<div class="subitem"><span>${esc(v.title)}${v.article ? ` · ${esc(v.article)}` : ""}</span>
+            ${item.variants.map(v => `<div class="subitem" data-record-id="${esc(v.id)}" role="button" tabindex="0" aria-label="Открыть вариант: ${esc(v.title)}"><span>${esc(v.title)}${v.article ? ` · ${esc(v.article)}` : ""}</span>
             <span class="status ${statusClass(v.status)}">${esc(v.status)}</span></div>`).join("")}</div>` : ""}
         </div>
       </article>`).join("") : '<div class="empty">Ничего не найдено. Попробуйте изменить запрос или фильтры.</div>';
