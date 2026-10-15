@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Кулисы — онлайн-склад студии</title>
+  <style>
+    :root {
+      --bg: #10100f;
+      --panel: #191817;
+      --muted: #aaa39e;
+      --text: #f8f4f0;
+      --orange: #ff641f;
+      --orange-light: #ff9b45;
+      --line: #37312e;
+      --green: #a9d7a0;
+      --red: #ffb2a4;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 12% 15%, #752b12 0, transparent 34rem),
+        radial-gradient(ellipse at 85% 50%, #38190f 0, transparent 35rem),
+        var(--bg);
+      min-height: 100vh;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .shell { max-width: 1240px; margin: auto; padding: 24px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; padding: 14px 0 24px;
+    }
+    .brand { font-size: 20px; font-weight: 850; letter-spacing: -.7px; }
+    .brand span { color: var(--orange); }
+    nav { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn, .nav-btn {
+      border: 1px solid var(--line); color: var(--text); background: #1b1918;
+      border-radius: 999px; padding: 11px 17px; transition: .2s;
+    }
+    .btn:hover, .nav-btn:hover { border-color: var(--orange); transform: translateY(-1px); }
+    .btn.primary, .nav-btn.active {
+      color: #1b100a; background: var(--orange); border-color: var(--orange); font-weight: 750;
+    }
+    .hero {
+      min-height: 390px; display: grid; grid-template-columns: 1.3fr .7fr;
+      align-items: center; gap: 30px; padding: clamp(28px, 6vw, 72px);
+      border-radius: 30px; overflow: hidden; position: relative;
+      background:
+        linear-gradient(105deg, rgba(255,82,24,.96), rgba(155,35,30,.77) 58%, rgba(30,16,20,.9)),
+        radial-gradient(circle at 80% 40%, #ffad58, transparent 45%);
+      box-shadow: 0 24px 70px #0007;
+    }
+    .hero:after {
+      content: "✦"; position: absolute; right: 8%; top: 5%;
+      font-size: clamp(130px, 25vw, 300px); line-height: 1; opacity: .08;
+    }
+    .eyebrow { color: #ffd1a6; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(42px, 7vw, 86px); line-height: .94; letter-spacing: -.07em; margin: 14px 0 20px; }
+    .hero p { max-width: 490px; color: #ffe5d4; font-size: 16px; line-height: 1.6; }
+    .hero-note { align-self: end; max-width: 250px; font-size: 19px; font-weight: 700; line-height: 1.3; position: relative; z-index: 1; }
+    .hero-note small { display: block; font-size: 12px; font-weight: 450; color: #f5cdbd; margin-top: 12px; line-height: 1.5; }
+    .section-head { display:flex; justify-content:space-between; gap:18px; align-items:end; margin: 48px 0 20px; }
+    h2 { margin: 0; font-size: clamp(26px, 4vw, 38px); letter-spacing: -.05em; }
+    .muted { color: var(--muted); }
+    .toolbar {
+      display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(140px, .7fr));
+      gap: 10px; margin: 20px 0 24px;
+    }
+    input, select, textarea {
+      width: 100%; border: 1px solid var(--line); color: var(--text);
+      background: #1b1918; border-radius: 13px; padding: 12px 14px; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--orange); }
+    textarea { min-height: 90px; resize: vertical; }
+    .grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .card {
+      border: 1px solid #ffffff12; background: #191817; border-radius: 19px;
+      overflow: hidden; transition: .2s;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #ff641f77; }
+    .photo {
+      height: 215px; background: linear-gradient(140deg, #43251b, #211b19);
+      display: grid; place-items: center; color: #b8a8a0; font-size: 42px; overflow: hidden;
+    }
+    .photo img { width:100%; height:100%; object-fit:cover; display:block; }
+    .card-body { padding: 15px; }
+    .card-top { display:flex; justify-content:space-between; gap:10px; align-items:start; }
+    .card h3 { font-size: 17px; margin: 0 0 7px; line-height: 1.2; }
+    .article { color: var(--muted); font-size: 12px; }
+    .status {
+      white-space: nowrap; border-radius: 999px; padding: 6px 9px;
+      font-size: 11px; background:#272421; color:#ddd;
+    }
+    .status.available { color: var(--green); background:#1c2a1e; }
+    .status.busy { color: #ffd58b; background:#332617; }
+    .status.repair { color: var(--red); background:#351e1b; }
+    .tags { display:flex; flex-wrap:wrap; gap:6px; margin: 13px 0; }
+    .tag { font-size:11px; color:#d4c5bb; background:#282422; border-radius:999px; padding:5px 8px; }
+    .card-actions { display:flex; gap:8px; margin-top:13px; }
+    .card-actions .btn { padding:8px 12px; font-size:12px; }
+    .subitems { border-top:1px solid var(--line); margin-top:14px; padding-top:12px; }
+    .subitem {
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+      padding:8px 0; border-bottom:1px solid #ffffff0d; font-size:13px;
+    }
+    .subitem:last-child { border-bottom:0; }
+    .empty, .panel {
+      border:1px solid var(--line); border-radius:18px; background:var(--panel); padding:24px;
+    }
+    .empty { grid-column:1/-1; text-align:center; color:var(--muted); }
+    .admin-wrap { max-width: 880px; margin: 30px auto; }
+    .admin-head { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:20px; }
+    .admin-list { display:grid; gap:10px; margin-top:20px; }
+    .admin-row {
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      padding:14px; border:1px solid var(--line); background:var(--panel); border-radius:14px;
+    }
+    .admin-row strong { display:block; margin-bottom:4px; }
+    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .field { display:grid; gap:7px; }
+    .field.full { grid-column:1/-1; }
+    label { font-size:13px; color:#d6cbc4; }
+    dialog {
+      width:min(720px, calc(100% - 24px)); max-height:90vh; overflow:auto;
+      border:1px solid var(--line); border-radius:20px; background:#171514; color:var(--text);
+      padding:22px; box-shadow:0 30px 100px #000b;
+    }
+    dialog::backdrop { background:#000a; backdrop-filter:blur(4px); }
+    .dialog-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    .dialog-head h2 { font-size:24px; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+    .preview { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .preview img { width:70px; height:70px; object-fit:cover; border-radius:10px; }
+    .sub-admin { margin-top:20px; border-top:1px solid var(--line); padding-top:16px; }
+    footer { padding:40px 0 20px; color:var(--muted); font-size:12px; }
+    .hidden { display:none !important; }
+    @media(max-width:900px) { .grid { grid-template-columns:repeat(3,1fr); } }
+    @media(max-width:680px) {
+      .shell { padding:16px; }
+      .hero { grid-template-columns:1fr; min-height:350px; }
+      .hero-note { align-self:auto; }
+      .toolbar { grid-template-columns:1fr; }
+      .grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+      .photo { height:170px; }
+      .card-body { padding:12px; }
+      .section-head { align-items:start; flex-direction:column; }
+      .form-grid { grid-template-columns:1fr; }
+      .field.full { grid-column:auto; }
+    }
+    @media(max-width:390px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">КУЛИСЫ<span> /</span> СКЛАД</div>
+      <nav>
+        <button class="nav-btn active" id="catalogNav" onclick="go('catalog')">Витрина</button>
+        <button class="nav-btn" id="adminNav" onclick="go('admin')">Для МТО</button>
+      </nav>
+    </header>
+
+    <main id="catalogPage">
+      <section class="hero">
+        <div>
+          <div class="eyebrow">Театральная студия · онлайн-склад</div>
+          <h1>Всё для<br>новых историй.</h1>
+          <p>Реквизит, костюмы и декорации студии — в одном месте. Найдите нужное для следующего спектакля.</p>
+          <button class="btn primary" onclick="document.querySelector('#search').focus()">Найти на складе&nbsp; →</button>
+        </div>
+        <div class="hero-note">Каждая вещь ждёт своего выхода на сцену.
+          <small>Каталог для режиссёров-педагогов. Доступность вещей обновляет отдел МТО.</small>
+        </div>
+      </section>
+
+      <div class="section-head">
+        <div><div class="eyebrow">Каталог студии</div><h2>На складе</h2></div>
+        <div class="muted" id="countLabel"></div>
+      </div>
+
+      <div class="toolbar">
+        <input id="search" placeholder="Поиск по названию, артикулу и тегам…" oninput="renderCatalog()" />
+        <select id="categoryFilter" onchange="renderCatalog()"><option value="">Все категории</option></select>
+        <select id="statusFilter" onchange="renderCatalog()">
+          <option value="">Все статусы</option>
+          <option>В наличии</option><option>Занят</option><option>На ремонте</option>
+        </select>
+      </div>
+      <div class="grid" id="catalogGrid"></div>
+    </main>
+
+    <main id="adminPage" class="hidden">
+      <div class="admin-wrap">
+        <section id="loginPanel" class="panel">
+          <div class="eyebrow">Закрытый раздел</div>
+          <h2 style="margin:8px 0 18px">Вход для МТО</h2>
+          <form id="loginForm" class="form-grid">
+            <div class="field"><label for="login">Логин</label><input id="login" autocomplete="username" required></div>
+            <div class="field"><label for="password">Пароль</label><input id="password" type="password" autocomplete="current-password" required></div>
+            <div class="field full"><button class="btn primary" type="submit">Войти</button></div>
+          </form>
+          <p class="muted">Демо-доступ: <code>admin</code> / <code>teatr123</code>. Перед публикацией замените на Supabase Auth.</p>
+        </section>
+
+        <section id="adminPanel" class="hidden">
+          <div class="admin-head">
+            <div><div class="eyebrow">Управление складом</div><h2>Карточки</h2></div>
+            <div class="row-actions">
+              <button class="btn primary" onclick="openItemEditor()">＋ Добавить карточку</button>
+              <button class="btn" onclick="logout()">Выйти</button>
+            </div>
+          </div>
+          <p class="muted">Создавайте и редактируйте карточки, добавляйте подкарточки-варианты.</p>
+          <div class="admin-list" id="adminList"></div>
+        </section>
+      </div>
+    </main>
+    <footer>КУЛИСЫ · Внутренний каталог театральной студии</footer>
+  </div>
+
+  <dialog id="itemDialog">
+    <div class="dialog-head">
+      <h2 id="dialogTitle">Новая карточка</h2>
+      <button class="btn" type="button" onclick="closeDialog()">Закрыть</button>
+    </div>
+    <form id="itemForm">
+      <div class="form-grid">
+        <div class="field"><label>Название</label><input name="title" required></div>
+        <div class="field"><label>Артикул</label><input name="article" placeholder="Например, KST-014"></div>
+        <div class="field"><label>Категория</label><input name="category" list="categoryOptions" placeholder="Костюмы, реквизит…" required></div>
+        <div class="field">
+          <label>Статус</label>
+          <select name="status"><option>В наличии</option><option>Занят</option><option>На ремонте</option></select>
+        </div>
+        <div class="field"><label>Кем занято (если применимо)</label><input name="bookedBy" placeholder="Имя педагога"></div>
+        <div class="field"><label>Теги через запятую</label><input name="tags" placeholder="праздник, корона, золотой"></div>
+        <div class="field full"><label>Описание</label><textarea name="description"></textarea></div>
+        <div class="field full">
+          <label>Фотографии (можно выбрать несколько)</label>
+          <input name="photos" type="file" accept="image/*" multiple>
+          <div class="preview" id="photoPreview"></div>
+          <small class="muted">В демо-файле изображения сохраняются в браузере. Для большого каталога храните их в Supabase Storage.</small>
+        </div>
+      </div>
+      <datalist id="categoryOptions"></datalist>
+      <section id="variantSection" class="sub-admin hidden">
+        <h3>Подкарточки / варианты</h3>
+        <p class="muted">У каждого варианта свои артикул, категория, статус, теги и фотографии.</p>
+        <div id="variantAdminList"></div>
+        <button class="btn" type="button" onclick="openVariantEditor()">＋ Добавить подкарточку</button>
+      </section>
+      <div class="dialog-actions">
+        <button class="btn" type="button" onclick="closeDialog()">Отмена</button>
+        <button class="btn primary" type="submit">Сохранить карточку</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="variantDialog">
+    <div class="dialog-head">
+      <h2 id="variantDialogTitle">Новая подкарточка</h2>
+      <button class="btn" type="button" onclick="variantDialog.close()">Закрыть</button>
+    </div>
+    <form id="variantForm">
+      <div class="form-grid">
+        <div class="field"><label>Название варианта</label><input name="title" required placeholder="Например, Размер 134–140"></div>
+        <div class="field"><label>Артикул</label><input name="article"></div>
+        <div class="field"><label>Категория</label><input name="category" required></div>
+        <div class="field"><label>Статус</label><select name="status"><option>В наличии</option><option>Занят</option><option>На ремонте</option></select></div>
+        <div class="field"><label>Кем занято</label><input name="bookedBy"></div>
+        <div class="field"><label>Теги через запятую</label><input name="tags"></div>
+        <div class="field full"><label>Описание</label><textarea name="description"></textarea></div>
+        <div class="field full"><label>Фотографии варианта</label><input name="photos" type="file" accept="image/*" multiple></div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" type="button" onclick="variantDialog.close()">Отмена</button>
+        <button class="btn primary" type="submit">Сохранить вариант</button>
+      </div>
+    </form>
+  </dialog>
+
+<script>
+  const STORAGE_KEY = "kulisy_inventory_v1";
+  const demoItems = [
+    { id:"1", title:"Корона золотая", article:"REK-001", category:"Реквизит", status:"В наличии", bookedBy:"",
+      tags:["корона","золото","сказка"], description:"Лёгкая сценическая корона с мягкой внутренней лентой.",
+      images:[], variants:[
+        {id:"11", title:"Маленькая", article:"REK-001-S", category:"Реквизит", status:"В наличии", bookedBy:"",
+         tags:["детская","корона"], description:"Подходит для младших актёров.", images:[]},
+        {id:"12", title:"Большая", article:"REK-001-L", category:"Реквизит", status:"Занят", bookedBy:"Анна Петрова",
+         tags:["корона"], description:"", images:[]}
+      ]},
+    { id:"2", title:"Плащ волшебника", article:"KST-014", category:"Костюмы", status:"В наличии", bookedBy:"",
+      tags:["плащ","волшебник","синий"], description:"Синий бархатный плащ с капюшоном.",
+      images:[], variants:[] },
+    { id:"3", title:"Декоративная луна", article:"DEC-008", category:"Декорации", status:"На ремонте", bookedBy:"",
+      tags:["луна","ночь","фон"], description:"Лёгкая подвесная декорация для сцены.",
+      images:[], variants:[] }
+  ];
+
+  let items = loadItems();
+  let currentItemId = null;
+  let currentVariantId = null;
+  let draftImages = [];
+  let variantDraftImages = [];
+  const itemDialog = document.querySelector("#itemDialog");
+  const variantDialog = document.querySelector("#variantDialog");
+
+  function loadItems() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : demoItems;
+    } catch { return demoItems; }
+  }
+  function saveItems() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch {
+      alert("Не удалось сохранить данные. Возможно, фотографии слишком большие. Попробуйте загрузить изображения меньшего размера.");
+    }
+  }
+  function esc(value="") {
+    return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+  function go(page) {
+    location.hash = page === "admin" ? "#/admin" : "#/catalog";
+    showPage(page);
+  }
+  function showPage(page) {
+    const admin = page === "admin";
+    document.querySelector("#catalogPage").classList.toggle("hidden", admin);
+    document.querySelector("#adminPage").classList.toggle("hidden", !admin);
+    document.querySelector("#catalogNav").classList.toggle("active", !admin);
+    document.querySelector("#adminNav").classList.toggle("active", admin);
+    renderCatalog();
+    renderAdmin();
+  }
+  window.addEventListener("hashchange", () => showPage(location.hash.includes("admin") ? "admin" : "catalog"));
+  showPage(location.hash.includes("admin") ? "admin" : "catalog");
+
+  function statusClass(status) {
+    if (status === "В наличии") return "available";
+    if (status === "Занят") return "busy";
+    if (status === "На ремонте") return "repair";
+    return "";
+  }
+  function allRecords() {
+    return items.flatMap(item => [item, ...(item.variants || [])]);
+  }
+  function renderCatalog() {
+    const categories = [...new Set(allRecords().map(x => x.category).filter(Boolean))].sort();
+    const select = document.querySelector("#categoryFilter");
+    const old = select.value;
+    select.innerHTML = '<option value="">Все категории</option>' +
+      categories.map(c => `<option>${esc(c)}</option>`).join("");
+    if (categories.includes(old)) select.value = old;
+    document.querySelector("#categoryOptions").innerHTML = categories.map(c => `<option value="${esc(c)}"></option>`).join("");
+
+    const query = document.querySelector("#search").value.toLowerCase().trim();
+    const category = select.value;
+    const status = document.querySelector("#statusFilter").value;
+    const found = allRecords().filter(x => {
+      const text = [x.title, x.article, x.category, x.description, ...(x.tags || []), x.bookedBy].join(" ").toLowerCase();
+      return (!query || text.includes(query)) && (!category || x.category === category) && (!status || x.status === status);
+    });
+    document.querySelector("#countLabel").textContent = `${found.length} позиций`;
+    document.querySelector("#catalogGrid").innerHTML = found.length ? found.map(item => `
+      <article class="card">
+        <div class="photo">${item.images?.[0] ? `<img src="${item.images[0]}" alt="${esc(item.title)}">` : "✦"}</div>
+        <div class="card-body">
+          <div class="card-top">
+            <div><h3>${esc(item.title)}</h3><div class="article">${esc(item.category)}${item.article ? " · " + esc(item.article) : ""}</div></div>
+            <span class="status ${statusClass(item.status)}">${esc(item.status || "Статус не указан")}</span>
+          </div>
+          ${item.status === "Занят" && item.bookedBy ? `<p class="muted" style="font-size:12px">Занято: ${esc(item.bookedBy)}</p>` : ""}
+          ${item.description ? `<p class="muted" style="font-size:13px;line-height:1.45">${esc(item.description)}</p>` : ""}
+          <div class="tags">${(item.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join("")}</div>
+          ${item.variants?.length ? `<div class="subitems"><strong style="font-size:12px">Варианты</strong>
+            ${item.variants.map(v => `<div class="subitem"><span>${esc(v.title)}${v.article ? ` · ${esc(v.article)}` : ""}</span>
+            <span class="status ${statusClass(v.status)}">${esc(v.status)}</span></div>`).join("")}</div>` : ""}
+        </div>
+      </article>`).join("") : '<div class="empty">Ничего не найдено. Попробуйте изменить запрос или фильтры.</div>';
+  }
+
+  function isLoggedIn() { return sessionStorage.getItem("kulisy_admin") === "yes"; }
+  function renderAdmin() {
+    const logged = isLoggedIn();
+    document.querySelector("#loginPanel").classList.toggle("hidden", logged);
+    document.querySelector("#adminPanel").classList.toggle("hidden", !logged);
+    if (!logged) return;
+    document.querySelector("#adminList").innerHTML = items.map(item => `
+      <div class="admin-row">
+        <div><strong>${esc(item.title)}</strong><span class="muted">${esc(item.category)} · ${esc(item.article || "без артикула")} · ${esc(item.status)}</span></div>
+        <div class="row-actions">
+          <button class="btn" onclick="openItemEditor('${item.id}')">Редактировать</button>
+          <button class="btn" onclick="deleteItem('${item.id}')">Удалить</button>
+        </div>
+      </div>`).join("") || '<div class="empty">Склад пока пуст. Добавьте первую карточку.</div>';
+  }
+
+  document.querySelector("#loginForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    if (data.get("login") === "admin" && data.get("password") === "teatr123") {
+      sessionStorage.setItem("kulisy_admin", "yes");
+      event.currentTarget.reset();
+      renderAdmin();
+    } else alert("Неверный логин или пароль.");
+  });
+  function logout() { sessionStorage.removeItem("kulisy_admin"); renderAdmin(); }
+  function deleteItem(id) {
+    const item = items.find(x => x.id === id);
+    if (item && confirm(`Удалить карточку «${item.title}» и её подкарточки?`)) {
+      items = items.filter(x => x.id !== id); saveItems(); renderAdmin(); renderCatalog();
+    }
+  }
+  function openItemEditor(id=null) {
+    if (!isLoggedIn()) return;
+    currentItemId = id;
+    const item = items.find(x => x.id === id);
+    const form = document.querySelector("#itemForm");
+    form.reset();
+    draftImages = item ? [...(item.images || [])] : [];
+    document.querySelector("#dialogTitle").textContent = item ? "Редактировать карточку" : "Новая карточка";
+    document.querySelector("#variantSection").classList.toggle("hidden", !item);
+    form.elements.title.value = item?.title || "";
+    form.elements.article.value = item?.article || "";
+    form.elements.category.value = item?.category || "";
+    form.elements.status.value = item?.status || "В наличии";
+    form.elements.bookedBy.value = item?.bookedBy || "";
+    form.elements.tags.value = (item?.tags || []).join(", ");
+    form.elements.description.value = item?.description || "";
+    renderPreviews();
+    if (item) renderVariantAdmin(item);
+    itemDialog.showModal();
+  }
+  function closeDialog() { itemDialog.close(); }
+
+  function renderPreviews() {
+    document.querySelector("#photoPreview").innerHTML = draftImages.map(src => `<img src="${src}" alt="Загруженное фото">`).join("");
+  }
+  document.querySelector('#itemForm [name="photos"]').addEventListener("change", async event => {
+    draftImages.push(...await readFiles(event.target.files)); renderPreviews(); event.target.value = "";
+  });
+  function readFiles(files) {
+    return Promise.all([...files].map(file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    })));
+  }
+  function formRecord(form, images, id) {
+    const data = new FormData(form);
+    return {
+      id: id || crypto.randomUUID(),
+      title: String(data.get("title")).trim(),
+      article: String(data.get("article")).trim(),
+      category: String(data.get("category")).trim(),
+      status: String(data.get("status")),
+      bookedBy: String(data.get("bookedBy") || "").trim(),
+      tags: String(data.get("tags") || "").split(",").map(t => t.trim()).filter(Boolean),
+      description: String(data.get("description") || "").trim(),
+      images,
+      variants: []
+    };
+  }
+  document.querySelector("#itemForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const record = formRecord(event.currentTarget, draftImages, currentItemId);
+    const index = items.findIndex(x => x.id === currentItemId);
+    if (index >= 0) {
+      record.variants = items[index].variants || [];
+      items[index] = record;
+    } else items.unshift(record);
+    saveItems(); closeDialog(); renderAdmin(); renderCatalog();
+  });
+
+  function renderVariantAdmin(item) {
+    document.querySelector("#variantAdminList").innerHTML = (item.variants || []).map(v => `
+      <div class="admin-row" style="margin:8px 0">
+        <div><strong>${esc(v.title)}</strong><span class="muted">${esc(v.article || "без артикула")} · ${esc(v.status)}</span></div>
+        <div class="row-actions">
+          <button class="btn" type="button" onclick="openVariantEditor('${v.id}')">Изменить</button>
+          <button class="btn" type="button" onclick="deleteVariant('${v.id}')">Удалить</button>
+        </div>
+      </div>`).join("") || '<p class="muted">Подкарточек пока нет.</p>';
+  }
+  function openVariantEditor(id=null) {
+    if (!currentItemId) return;
+    currentVariantId = id;
+    const parent = items.find(x => x.id === currentItemId);
+    const variant = parent.variants.find(x => x.id === id);
+    const form = document.querySelector("#variantForm");
+    form.reset();
+    variantDraftImages = variant ? [...(variant.images || [])] : [];
+    document.querySelector("#variantDialogTitle").textContent = variant ? "Редактировать подкарточку" : "Новая подкарточка";
+    for (const key of ["title","article","category","status","bookedBy","description"]) {
+      if (form.elements[key]) form.elements[key].value = variant?.[key] || (key === "status" ? "В наличии" : "");
+    }
+    form.elements.tags.value = (variant?.tags || []).join(", ");
+    variantDialog.showModal();
+  }
+  document.querySelector("#variantForm [name='photos']").addEventListener("change", async event => {
+    variantDraftImages.push(...await readFiles(event.target.files)); event.target.value = "";
+  });
+  document.querySelector("#variantForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const parent = items.find(x => x.id === currentItemId);
+    if (!parent) return;
+    const record = formRecord(event.currentTarget, variantDraftImages, currentVariantId);
+    const index = parent.variants.findIndex(x => x.id === currentVariantId);
+    if (index >= 0) parent.variants[index] = record;
+    else parent.variants.push(record);
+    saveItems(); variantDialog.close(); renderVariantAdmin(parent); renderCatalog();
+  });
+  function deleteVariant(id) {
+    const parent = items.find(x => x.id === currentItemId);
+    if (parent && confirm("Удалить подкарточку?")) {
+      parent.variants = parent.variants.filter(x => x.id !== id);
+      saveItems(); renderVariantAdmin(parent); renderCatalog();
+    }
+  }
+</script>
+</body>
+</html>
