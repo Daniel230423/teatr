@@ -351,13 +351,21 @@
     const { error } = await supabaseClient.from("inventory_items").upsert(toDatabase(item));
     if (error) throw error;
   }
+  async function uploadStorageObject(path, file, options) {
+    const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file, options);
+    if (error) {
+      if (error.message?.includes("row-level security")) {
+        throw new Error(`${error.message} Проверьте RLS-политику для bucket "${STORAGE_BUCKET}" по инструкции SUPABASE_SETUP.md.`);
+      }
+      throw error;
+    }
+    return supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+  }
   async function uploadFiles(files) {
     if (!supabaseClient || !currentUser) throw new Error("Войдите в раздел МТО, чтобы загружать фотографии.");
     return Promise.all([...files].map(async file => {
       const path = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file);
-      if (error) throw error;
-      return supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+      return uploadStorageObject(path, file);
     }));
   }
   async function uploadLegacyImage(source) {
@@ -365,9 +373,7 @@
     const blob = await (await fetch(source)).blob();
     const extension = blob.type.split("/")[1]?.replace(/[^a-zA-Z0-9]/g, "") || "img";
     const path = `${crypto.randomUUID()}.${extension}`;
-    const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, blob, { contentType: blob.type });
-    if (error) throw error;
-    return supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+    return uploadStorageObject(path, blob, { contentType: blob.type });
   }
   async function migrateLegacyRecord(record) {
     const images = await Promise.all((record.images || []).map(uploadLegacyImage));

@@ -67,10 +67,24 @@ using (auth.uid() is not null);
 Создайте в **Storage** публичный bucket с точным именем `inventory-photos`. Публичность нужна для отображения фотографий посетителям каталога. Затем в SQL Editor разрешите авторизованным сотрудникам загружать файлы:
 
 ```sql
+drop policy if exists "Employees can upload inventory photos" on storage.objects;
+
 create policy "Employees can upload inventory photos"
 on storage.objects for insert
 to authenticated
 with check (bucket_id = 'inventory-photos');
+```
+
+Если при загрузке появляется `new row violates row-level security policy`, проверьте, что SQL выше выполнен именно в проекте, указанном в `supabase-config.js`, bucket называется ровно `inventory-photos`, а сотрудник вошёл в раздел МТО. Политика разрешает вставку только вошедшим пользователям и только в этот bucket; не заменяйте её политикой `to anon` или разрешением для всех.
+
+Проверить наличие политики можно запросом:
+
+```sql
+select policyname, roles, cmd, with_check
+from pg_policies
+where schemaname = 'storage'
+  and tablename = 'objects'
+  and policyname = 'Employees can upload inventory photos';
 ```
 
 Загрузка фотографий через сайт доступна только после входа. Настройте допустимый размер файла в настройках bucket согласно потребностям проекта.
