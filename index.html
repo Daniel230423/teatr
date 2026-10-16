@@ -196,6 +196,7 @@
           <option>В наличии</option><option>Занят</option><option>На ремонте</option>
         </select>
       </div>
+      <p id="connectionStatus" class="muted" role="status"></p>
       <div class="grid" id="catalogGrid"></div>
     </main>
 
@@ -205,17 +206,18 @@
           <div class="eyebrow">Закрытый раздел</div>
           <h2 style="margin:8px 0 18px">Вход для МТО</h2>
           <form id="loginForm" class="form-grid">
-            <div class="field"><label for="login">Логин</label><input id="login" name="login" autocomplete="username" required></div>
+            <div class="field"><label for="login">Email сотрудника</label><input id="login" name="login" type="email" autocomplete="username" required></div>
             <div class="field"><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
             <div class="field full"><button class="btn primary" type="submit">Войти</button></div>
           </form>
-          <p class="muted">Демо-доступ: <code>admin</code> / <code>teatr123</code>. Перед публикацией замените на Supabase Auth.</p>
+          <p id="loginMessage" class="muted">Войдите с учетной записью сотрудника Supabase Auth.</p>
         </section>
 
         <section id="adminPanel" class="hidden">
           <div class="admin-head">
             <div><div class="eyebrow">Управление складом</div><h2>Карточки</h2></div>
             <div class="row-actions">
+              <button class="btn" id="legacyImportButton" onclick="importLegacyItems()" hidden>Перенести данные из браузера</button>
               <button class="btn primary" onclick="openItemEditor()">＋ Добавить карточку</button>
               <button class="btn" onclick="logout()">Выйти</button>
             </div>
@@ -249,7 +251,7 @@
           <label>Фотографии (можно выбрать несколько)</label>
           <input name="photos" type="file" accept="image/*" multiple>
           <div class="preview" id="photoPreview"></div>
-          <small class="muted">В демо-файле изображения сохраняются в браузере. Для большого каталога храните их в Supabase Storage.</small>
+          <small class="muted">Фотографии хранятся в Supabase Storage.</small>
         </div>
       </div>
       <datalist id="categoryOptions"></datalist>
@@ -297,26 +299,20 @@
     <div id="detailContent"></div>
   </dialog>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script>
   const STORAGE_KEY = "kulisy_inventory_v1";
-  const demoItems = [
-    { id:"1", title:"Корона золотая", article:"REK-001", category:"Реквизит", status:"В наличии", bookedBy:"",
-      tags:["корона","золото","сказка"], description:"Лёгкая сценическая корона с мягкой внутренней лентой.",
-      images:[], variants:[
-        {id:"11", title:"Маленькая", article:"REK-001-S", category:"Реквизит", status:"В наличии", bookedBy:"",
-         tags:["детская","корона"], description:"Подходит для младших актёров.", images:[]},
-        {id:"12", title:"Большая", article:"REK-001-L", category:"Реквизит", status:"Занят", bookedBy:"Анна Петрова",
-         tags:["корона"], description:"", images:[]}
-      ]},
-    { id:"2", title:"Плащ волшебника", article:"KST-014", category:"Костюмы", status:"В наличии", bookedBy:"",
-      tags:["плащ","волшебник","синий"], description:"Синий бархатный плащ с капюшоном.",
-      images:[], variants:[] },
-    { id:"3", title:"Декоративная луна", article:"DEC-008", category:"Декорации", status:"На ремонте", bookedBy:"",
-      tags:["луна","ночь","фон"], description:"Лёгкая подвесная декорация для сцены.",
-      images:[], variants:[] }
-  ];
-
-  let items = loadItems();
+  const STORAGE_BUCKET = "inventory-photos";
+  const supabaseConfig = window.SUPABASE_CONFIG;
+  const supabaseClient = window.supabase && supabaseConfig?.url && supabaseConfig?.anonKey
+    ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
+    : null;
+  let items = [];
+  let currentUser = null;
+  let inventoryLoaded = false;
+  let legacyItemsAvailable = false;
+  let connectionMessage = "";
   let currentItemId = null;
   let currentVariantId = null;
   let draftImages = [];
@@ -325,18 +321,88 @@
   const variantDialog = document.querySelector("#variantDialog");
   const detailDialog = document.querySelector("#detailDialog");
 
-  function loadItems() {
+  function loadLegacyItems() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : demoItems;
-    } catch { return demoItems; }
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
   }
-  function saveItems() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      alert("Не удалось сохранить данные. Возможно, фотографии слишком большие. Попробуйте загрузить изображения меньшего размера.");
+  function setConnectionMessage(message) {
+    connectionMessage = message;
+    const element = document.querySelector("#connectionStatus");
+    if (element) element.textContent = message;
+  }
+  function fromDatabase(row) {
+    return {
+      id: row.id, title: row.title, article: row.article || "", category: row.category,
+      status: row.status, bookedBy: row.booked_by || "", tags: row.tags || [],
+      description: row.description || "", images: row.images || [], variants: row.variants || []
+    };
+  }
+  function toDatabase(item) {
+    return {
+      id: item.id, title: item.title, article: item.article || "", category: item.category,
+      status: item.status, booked_by: item.bookedBy || "", tags: item.tags || [],
+      description: item.description || "", images: item.images || [], variants: item.variants || []
+    };
+  }
+  async function persistItem(item) {
+    const { error } = await supabaseClient.from("inventory_items").upsert(toDatabase(item));
+    if (error) throw error;
+  }
+  async function uploadFiles(files) {
+    if (!supabaseClient || !currentUser) throw new Error("Войдите в раздел МТО, чтобы загружать фотографии.");
+    return Promise.all([...files].map(async file => {
+      const path = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file);
+      if (error) throw error;
+      return supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+    }));
+  }
+  async function uploadLegacyImage(source) {
+    if (!source.startsWith("data:")) return source;
+    const blob = await (await fetch(source)).blob();
+    const extension = blob.type.split("/")[1]?.replace(/[^a-zA-Z0-9]/g, "") || "img";
+    const path = `${crypto.randomUUID()}.${extension}`;
+    const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, blob, { contentType: blob.type });
+    if (error) throw error;
+    return supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(data.path).data.publicUrl;
+  }
+  async function migrateLegacyRecord(record) {
+    const images = await Promise.all((record.images || []).map(uploadLegacyImage));
+    const variants = await Promise.all((record.variants || []).map(async variant => ({
+      ...variant, images: await Promise.all((variant.images || []).map(uploadLegacyImage))
+    })));
+    return { ...record, images, variants };
+  }
+  async function initializeApp() {
+    showPage(location.hash.includes("admin") ? "admin" : "catalog");
+    if (!supabaseClient) {
+      inventoryLoaded = true;
+      setConnectionMessage("Supabase не настроен. Заполните supabase-config.js по инструкции SUPABASE_SETUP.md.");
+      renderCatalog();
+      renderAdmin();
+      return;
     }
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError) setConnectionMessage(`Ошибка авторизации Supabase: ${sessionError.message}`);
+    currentUser = sessionData?.session?.user || null;
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      currentUser = session?.user || null;
+      renderAdmin();
+    });
+    const { data, error } = await supabaseClient.from("inventory_items").select("*").order("title");
+    inventoryLoaded = true;
+    if (error) {
+      setConnectionMessage(`Не удалось загрузить каталог из Supabase: ${error.message}`);
+    } else {
+      items = (data || []).map(fromDatabase);
+      legacyItemsAvailable = items.length === 0 && loadLegacyItems().length > 0;
+      setConnectionMessage(items.length ? "" : legacyItemsAvailable ? "База пуста. Войдите в МТО, чтобы перенести данные из этого браузера." : "Каталог пока пуст.");
+    }
+    renderCatalog();
+    renderAdmin();
   }
   function esc(value="") {
     return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -408,6 +474,23 @@
     openRecordDetails(target.dataset.recordId);
   });
   function renderCatalog() {
+    const countLabel = document.querySelector("#countLabel");
+    const catalogGrid = document.querySelector("#catalogGrid");
+    if (!supabaseClient) {
+      countLabel.textContent = "";
+      catalogGrid.innerHTML = '<div class="empty">Подключите Supabase, чтобы загрузить каталог.</div>';
+      return;
+    }
+    if (!inventoryLoaded) {
+      countLabel.textContent = "";
+      catalogGrid.innerHTML = '<div class="empty">Загрузка каталога…</div>';
+      return;
+    }
+    if (connectionMessage.startsWith("Не удалось") || connectionMessage.startsWith("Ошибка")) {
+      countLabel.textContent = "";
+      catalogGrid.innerHTML = `<div class="empty">${esc(connectionMessage)}</div>`;
+      return;
+    }
     const categories = [...new Set(allRecords().map(x => x.category).filter(Boolean))].sort();
     const select = document.querySelector("#categoryFilter");
     const old = select.value;
@@ -423,8 +506,8 @@
       const text = [x.title, x.article, x.category, x.description, ...(x.tags || []), x.bookedBy].join(" ").toLowerCase();
       return (!query || text.includes(query)) && (!category || x.category === category) && (!status || x.status === status);
     });
-    document.querySelector("#countLabel").textContent = `${found.length} позиций`;
-    document.querySelector("#catalogGrid").innerHTML = found.length ? found.map(item => `
+    countLabel.textContent = `${found.length} позиций`;
+    catalogGrid.innerHTML = found.length ? found.map(item => `
       <article class="card" data-record-id="${esc(item.id)}" role="button" tabindex="0" aria-label="Открыть карточку: ${esc(item.title)}">
         <div class="photo">${item.images?.[0] ? `<img src="${item.images[0]}" alt="${esc(item.title)}">` : "✦"}</div>
         <div class="card-body">
@@ -442,11 +525,13 @@
       </article>`).join("") : '<div class="empty">Ничего не найдено. Попробуйте изменить запрос или фильтры.</div>';
   }
 
-  function isLoggedIn() { return sessionStorage.getItem("kulisy_admin") === "yes"; }
+  function isLoggedIn() { return Boolean(currentUser); }
   function renderAdmin() {
     const logged = isLoggedIn();
     document.querySelector("#loginPanel").classList.toggle("hidden", logged);
     document.querySelector("#adminPanel").classList.toggle("hidden", !logged);
+    document.querySelector("#legacyImportButton").hidden = !logged || !legacyItemsAvailable || items.length > 0;
+    if (!supabaseClient) document.querySelector("#loginMessage").textContent = "Сначала настройте Supabase по инструкции SUPABASE_SETUP.md.";
     if (!logged) return;
     document.querySelector("#adminList").innerHTML = items.map(item => `
       <div class="admin-row">
@@ -458,20 +543,48 @@
       </div>`).join("") || '<div class="empty">Склад пока пуст. Добавьте первую карточку.</div>';
   }
 
-  document.querySelector("#loginForm").addEventListener("submit", event => {
+  document.querySelector("#loginForm").addEventListener("submit", async event => {
     event.preventDefault();
+    if (!supabaseClient) return;
     const data = new FormData(event.currentTarget);
-    if (data.get("login") === "admin" && data.get("password") === "teatr123") {
-      sessionStorage.setItem("kulisy_admin", "yes");
+    const { error } = await supabaseClient.auth.signInWithPassword({
+      email: String(data.get("login")).trim(), password: String(data.get("password"))
+    });
+    if (!error) {
       event.currentTarget.reset();
-      renderAdmin();
-    } else alert("Неверный логин или пароль.");
+      document.querySelector("#loginMessage").textContent = "";
+    } else document.querySelector("#loginMessage").textContent = `Не удалось войти: ${error.message}`;
   });
-  function logout() { sessionStorage.removeItem("kulisy_admin"); renderAdmin(); }
-  function deleteItem(id) {
+  async function logout() {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) alert(`Не удалось выйти: ${error.message}`);
+  }
+  async function deleteItem(id) {
     const item = items.find(x => x.id === id);
     if (item && confirm(`Удалить карточку «${item.title}» и её подкарточки?`)) {
-      items = items.filter(x => x.id !== id); saveItems(); renderAdmin(); renderCatalog();
+      const { error } = await supabaseClient.from("inventory_items").delete().eq("id", id);
+      if (error) return alert(`Не удалось удалить карточку: ${error.message}`);
+      items = items.filter(x => x.id !== id);
+      renderAdmin(); renderCatalog();
+    }
+  }
+  async function importLegacyItems() {
+    const legacyItems = loadLegacyItems();
+    if (!currentUser || items.length || !legacyItems.length) return;
+    const button = document.querySelector("#legacyImportButton");
+    button.disabled = true;
+    try {
+      const migratedItems = await Promise.all(legacyItems.map(migrateLegacyRecord));
+      const { error } = await supabaseClient.from("inventory_items").upsert(migratedItems.map(toDatabase));
+      if (error) throw error;
+      items = migratedItems;
+      legacyItemsAvailable = false;
+      setConnectionMessage("Данные из этого браузера перенесены в Supabase.");
+      renderCatalog();
+      renderAdmin();
+    } catch (error) {
+      alert(`Не удалось перенести данные: ${error.message}`);
+      button.disabled = false;
     }
   }
   function openItemEditor(id=null) {
@@ -500,16 +613,12 @@
     document.querySelector("#photoPreview").innerHTML = draftImages.map(src => `<img src="${src}" alt="Загруженное фото">`).join("");
   }
   document.querySelector('#itemForm [name="photos"]').addEventListener("change", async event => {
-    draftImages.push(...await readFiles(event.target.files)); renderPreviews(); event.target.value = "";
+    try {
+      draftImages.push(...await uploadFiles(event.target.files));
+      renderPreviews();
+    } catch (error) { alert(`Не удалось загрузить фотографии: ${error.message}`); }
+    event.target.value = "";
   });
-  function readFiles(files) {
-    return Promise.all([...files].map(file => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    })));
-  }
   function formRecord(form, images, id) {
     const data = new FormData(form);
     return {
@@ -525,15 +634,18 @@
       variants: []
     };
   }
-  document.querySelector("#itemForm").addEventListener("submit", event => {
+  document.querySelector("#itemForm").addEventListener("submit", async event => {
     event.preventDefault();
     const record = formRecord(event.currentTarget, draftImages, currentItemId);
     const index = items.findIndex(x => x.id === currentItemId);
-    if (index >= 0) {
+    if (index >= 0)
       record.variants = items[index].variants || [];
-      items[index] = record;
-    } else items.unshift(record);
-    saveItems(); closeDialog(); renderAdmin(); renderCatalog();
+    try {
+      await persistItem(record);
+      if (index >= 0) items[index] = record;
+      else items.unshift(record);
+      closeDialog(); renderAdmin(); renderCatalog();
+    } catch (error) { alert(`Не удалось сохранить карточку: ${error.message}`); }
   });
 
   function renderVariantAdmin(item) {
@@ -562,25 +674,37 @@
     variantDialog.showModal();
   }
   document.querySelector("#variantForm [name='photos']").addEventListener("change", async event => {
-    variantDraftImages.push(...await readFiles(event.target.files)); event.target.value = "";
+    try { variantDraftImages.push(...await uploadFiles(event.target.files)); }
+    catch (error) { alert(`Не удалось загрузить фотографии: ${error.message}`); }
+    event.target.value = "";
   });
-  document.querySelector("#variantForm").addEventListener("submit", event => {
+  document.querySelector("#variantForm").addEventListener("submit", async event => {
     event.preventDefault();
     const parent = items.find(x => x.id === currentItemId);
     if (!parent) return;
     const record = formRecord(event.currentTarget, variantDraftImages, currentVariantId);
-    const index = parent.variants.findIndex(x => x.id === currentVariantId);
-    if (index >= 0) parent.variants[index] = record;
-    else parent.variants.push(record);
-    saveItems(); variantDialog.close(); renderVariantAdmin(parent); renderCatalog();
+    const variants = [...(parent.variants || [])];
+    const index = variants.findIndex(x => x.id === currentVariantId);
+    if (index >= 0) variants[index] = record;
+    else variants.push(record);
+    try {
+      await persistItem({ ...parent, variants });
+      parent.variants = variants;
+      variantDialog.close(); renderVariantAdmin(parent); renderCatalog();
+    } catch (error) { alert(`Не удалось сохранить вариант: ${error.message}`); }
   });
-  function deleteVariant(id) {
+  async function deleteVariant(id) {
     const parent = items.find(x => x.id === currentItemId);
     if (parent && confirm("Удалить подкарточку?")) {
-      parent.variants = parent.variants.filter(x => x.id !== id);
-      saveItems(); renderVariantAdmin(parent); renderCatalog();
+      const variants = parent.variants.filter(x => x.id !== id);
+      try {
+        await persistItem({ ...parent, variants });
+        parent.variants = variants;
+        renderVariantAdmin(parent); renderCatalog();
+      } catch (error) { alert(`Не удалось удалить вариант: ${error.message}`); }
     }
   }
+  initializeApp();
 </script>
 </body>
 </html>
