@@ -98,6 +98,7 @@
     .status.available { color: var(--green); background:#1c2a1e; }
     .status.busy { color: #ffd58b; background:#332617; }
     .status.repair { color: var(--red); background:#351e1b; }
+    .status.draft { color:#d4c5bb; background:#282422; }
     .tags { display:flex; flex-wrap:wrap; gap:6px; margin: 13px 0; }
     .tag { font-size:11px; color:#d4c5bb; background:#282422; border-radius:999px; padding:5px 8px; }
     .card-actions { display:flex; gap:8px; margin-top:13px; }
@@ -264,6 +265,7 @@
       <div class="dialog-actions">
         <button class="btn" type="button" onclick="closeDialog()">Отмена</button>
         <button class="btn primary" type="submit">Сохранить карточку</button>
+        <button class="btn" type="submit" name="saveAction" value="draft" formnovalidate>Сохранить как черновик</button>
       </div>
     </form>
   </dialog>
@@ -337,14 +339,16 @@
     return {
       id: row.id, title: row.title, article: row.article || "", category: row.category,
       status: row.status, bookedBy: row.booked_by || "", tags: row.tags || [],
-      description: row.description || "", images: row.images || [], variants: row.variants || []
+      description: row.description || "", images: row.images || [], variants: row.variants || [],
+      isDraft: Boolean(row.is_draft)
     };
   }
   function toDatabase(item) {
     return {
       id: item.id, title: item.title, article: item.article || "", category: item.category,
       status: item.status, booked_by: item.bookedBy || "", tags: item.tags || [],
-      description: item.description || "", images: item.images || [], variants: item.variants || []
+      description: item.description || "", images: item.images || [], variants: item.variants || [],
+      is_draft: Boolean(item.isDraft)
     };
   }
   async function persistItem(item) {
@@ -436,7 +440,7 @@
     return "";
   }
   function allRecords() {
-    return items.flatMap(item => [item, ...(item.variants || [])]);
+    return items.filter(item => !item.isDraft).flatMap(item => [item, ...(item.variants || [])]);
   }
   function openRecordDetails(id) {
     const record = allRecords().find(item => item.id === id);
@@ -541,7 +545,7 @@
     if (!logged) return;
     document.querySelector("#adminList").innerHTML = items.map(item => `
       <div class="admin-row">
-        <div><strong>${esc(item.title)}</strong><span class="muted">${esc(item.category)} · ${esc(item.article || "без артикула")} · ${esc(item.status)}</span></div>
+        <div><strong>${esc(item.title || "Без названия")}</strong><span class="muted">${item.isDraft ? '<span class="status draft">Черновик</span> · ' : ""}${esc(item.category || "Без категории")} · ${esc(item.article || "без артикула")} · ${esc(item.status)}</span></div>
         <div class="row-actions">
           <button class="btn" onclick="openItemEditor('${item.id}')">Редактировать</button>
           <button class="btn" onclick="deleteItem('${item.id}')">Удалить</button>
@@ -643,6 +647,7 @@
   document.querySelector("#itemForm").addEventListener("submit", async event => {
     event.preventDefault();
     const record = formRecord(event.currentTarget, draftImages, currentItemId);
+    record.isDraft = event.submitter?.value === "draft";
     const index = items.findIndex(x => x.id === currentItemId);
     if (index >= 0)
       record.variants = items[index].variants || [];

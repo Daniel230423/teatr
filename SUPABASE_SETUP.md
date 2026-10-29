@@ -31,6 +31,7 @@ create table public.inventory_items (
   description text not null default '',
   images jsonb not null default '[]'::jsonb,
   variants jsonb not null default '[]'::jsonb,
+  is_draft boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -60,7 +61,14 @@ to authenticated
 using (auth.uid() is not null);
 ```
 
-Карточки хранятся в `inventory_items`; варианты вложены в JSONB-поле `variants`.
+Карточки хранятся в `inventory_items`; варианты вложены в JSONB-поле `variants`. Черновики хранятся в той же таблице с `is_draft = true`: они видны сотрудникам в разделе МТО, но не отображаются в публичном каталоге.
+
+Если таблица `inventory_items` уже создана, добавьте поле для черновиков:
+
+```sql
+alter table public.inventory_items
+add column if not exists is_draft boolean not null default false;
+```
 
 ## 3. Настройте фотографии
 
