@@ -68,6 +68,8 @@ using (auth.uid() is not null);
 ```sql
 alter table public.inventory_items
 add column if not exists is_draft boolean not null default false;
+
+notify pgrst, 'reload schema';
 ```
 
 ## 3. Настройте фотографии

@@ -353,7 +353,16 @@
   }
   async function persistItem(item) {
     const { error } = await supabaseClient.from("inventory_items").upsert(toDatabase(item));
-    if (error) throw error;
+    if (error) {
+      if (error.code === "PGRST204" && error.message?.includes("'is_draft'")) {
+        throw new Error(
+          "В таблице inventory_items не найден столбец is_draft. В SQL Editor проекта Supabase выполните: " +
+          "ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS is_draft boolean NOT NULL DEFAULT false; " +
+          "NOTIFY pgrst, 'reload schema'; Затем обновите страницу."
+        );
+      }
+      throw error;
+    }
   }
   async function uploadStorageObject(path, file, options) {
     const { data, error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file, options);
