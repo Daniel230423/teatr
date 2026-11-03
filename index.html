@@ -532,10 +532,10 @@
     const query = document.querySelector("#search").value.toLowerCase().trim();
     const category = select.value;
     const status = document.querySelector("#statusFilter").value;
-    const found = allRecords().filter(x => {
+    const found = items.filter(item => !item.isDraft && [item, ...(item.variants || [])].some(x => {
       const text = [x.title, x.article, x.category, x.description, ...(x.tags || []), x.bookedBy].join(" ").toLowerCase();
       return (!query || text.includes(query)) && (!category || x.category === category) && (!status || x.status === status);
-    });
+    }));
     countLabel.textContent = `${found.length} позиций`;
     catalogGrid.innerHTML = found.length ? found.map(item => `
       <article class="card" data-record-id="${esc(item.id)}" role="button" tabindex="0" aria-label="Открыть карточку: ${esc(item.title)}">
@@ -548,9 +548,6 @@
           ${item.status === "Занят" && item.bookedBy ? `<p class="muted" style="font-size:12px">Занято: ${esc(item.bookedBy)}</p>` : ""}
           ${item.description ? `<p class="muted" style="font-size:13px;line-height:1.45">${esc(item.description)}</p>` : ""}
           <div class="tags">${(item.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join("")}</div>
-          ${item.variants?.length ? `<div class="subitems"><strong style="font-size:12px">Варианты</strong>
-            ${item.variants.map(v => `<div class="subitem" data-record-id="${esc(v.id)}" role="button" tabindex="0" aria-label="Открыть вариант: ${esc(v.title)}"><span>${esc(v.title)}${v.article ? ` · ${esc(v.article)}` : ""}</span>
-            <span class="status ${statusClass(v.status)}">${esc(v.status)}</span></div>`).join("")}</div>` : ""}
         </div>
       </article>`).join("") : '<div class="empty">Ничего не найдено. Попробуйте изменить запрос или фильтры.</div>';
   }
