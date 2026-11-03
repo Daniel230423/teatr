@@ -121,6 +121,7 @@
       padding:14px; border:1px solid var(--line); background:var(--panel); border-radius:14px;
     }
     .admin-row strong { display:block; margin-bottom:4px; }
+    .admin-toolbar { display:grid; grid-template-columns:minmax(220px, 1fr) minmax(200px, .7fr); gap:10px; }
     .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .field { display:grid; gap:7px; }
@@ -155,6 +156,7 @@
       .photo { height:170px; }
       .card-body { padding:12px; }
       .section-head { align-items:start; flex-direction:column; }
+      .admin-toolbar { grid-template-columns:1fr; }
       .form-grid { grid-template-columns:1fr; }
       .field.full { grid-column:auto; }
     }
@@ -224,6 +226,15 @@
             </div>
           </div>
           <p class="muted">Создавайте и редактируйте карточки, добавляйте подкарточки-варианты.</p>
+          <div class="admin-toolbar">
+            <input id="adminSearch" type="search" placeholder="Поиск по названию, артикулу или дате создания…" oninput="renderAdmin()" aria-label="Поиск карточек МТО">
+            <select id="adminSort" onchange="renderAdmin()" aria-label="Сортировка карточек МТО">
+              <option value="created-desc">Сначала новые</option>
+              <option value="created-asc">Сначала старые</option>
+              <option value="article-asc">Артикул: А–Я</option>
+              <option value="article-desc">Артикул: Я–А</option>
+            </select>
+          </div>
           <div class="admin-list" id="adminList"></div>
         </section>
       </div>
@@ -340,7 +351,7 @@
       id: row.id, title: row.title, article: row.article || "", category: row.category,
       status: row.status, bookedBy: row.booked_by || "", tags: row.tags || [],
       description: row.description || "", images: row.images || [], variants: row.variants || [],
-      isDraft: Boolean(row.is_draft)
+      isDraft: Boolean(row.is_draft), createdAt: row.created_at || ""
     };
   }
   function toDatabase(item) {
@@ -552,14 +563,30 @@
     document.querySelector("#legacyImportButton").hidden = !logged || !legacyItemsAvailable || items.length > 0;
     if (!supabaseClient) document.querySelector("#loginMessage").textContent = "Сначала настройте Supabase по инструкции SUPABASE_SETUP.md.";
     if (!logged) return;
-    document.querySelector("#adminList").innerHTML = items.map(item => `
+    const query = document.querySelector("#adminSearch").value.trim().toLocaleLowerCase("ru");
+    const sort = document.querySelector("#adminSort").value;
+    const filteredItems = items.filter(item => {
+      const createdAt = item.createdAt ? new Date(item.createdAt) : null;
+      const dateText = createdAt && !Number.isNaN(createdAt.getTime())
+        ? `${createdAt.toLocaleString("ru-RU")} ${item.createdAt}` : "";
+      return !query || [item.title, item.article, item.category, dateText].join(" ").toLocaleLowerCase("ru").includes(query);
+    });
+    filteredItems.sort((a, b) => {
+      if (sort.startsWith("article")) {
+        const order = (a.article || "").localeCompare(b.article || "", "ru", { numeric: true, sensitivity: "base" });
+        return sort === "article-asc" ? order : -order;
+      }
+      const order = (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0);
+      return sort === "created-asc" ? order : -order;
+    });
+    document.querySelector("#adminList").innerHTML = filteredItems.map(item => `
       <div class="admin-row">
-        <div><strong>${esc(item.title || "Без названия")}</strong><span class="muted">${item.isDraft ? '<span class="status draft">Черновик</span> · ' : ""}${esc(item.category || "Без категории")} · ${esc(item.article || "без артикула")} · ${esc(item.status)}</span></div>
+        <div><strong>${esc(item.title || "Без названия")}</strong><span class="muted">${item.isDraft ? '<span class="status draft">Черновик</span> · ' : ""}${esc(item.category || "Без категории")} · ${esc(item.article || "без артикула")} · ${esc(item.status)} · ${item.createdAt && !Number.isNaN(Date.parse(item.createdAt)) ? `Создана: ${esc(new Date(item.createdAt).toLocaleString("ru-RU"))}` : "Время создания неизвестно"}</span></div>
         <div class="row-actions">
           <button class="btn" onclick="openItemEditor('${item.id}')">Редактировать</button>
           <button class="btn" onclick="deleteItem('${item.id}')">Удалить</button>
         </div>
-      </div>`).join("") || '<div class="empty">Склад пока пуст. Добавьте первую карточку.</div>';
+      </div>`).join("") || `<div class="empty">${items.length ? "Карточки не найдены." : "Склад пока пуст. Добавьте первую карточку."}</div>`;
   }
 
   document.querySelector("#loginForm").addEventListener("submit", async event => {
@@ -660,6 +687,7 @@
     const index = items.findIndex(x => x.id === currentItemId);
     if (index >= 0)
       record.variants = items[index].variants || [];
+    record.createdAt = index >= 0 ? items[index].createdAt : new Date().toISOString();
     try {
       await persistItem(record);
       if (index >= 0) items[index] = record;
